@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Nuxt generated files
+.nuxt/
+.output/
+dist/
+
+# Local environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Local editor and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# package-lock.json and yarn.lock are intentionally ignored to avoid conflicts in dependency management across different environments.
+.package-lock.json
