@@ -1,9 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
+  type AudioImportProgress,
   type DownloadedTrack,
   fetchAllDownloads,
   addDownloadToSqlite,
+  addLocalAudioToSqlite,
+  getLocalAudioFile,
   removeDownloadFromSqlite,
   clearAllSqliteDownloads,
   exportSqliteDatabaseBlob,
@@ -17,7 +20,10 @@ export interface Track {
   channel: string
   thumb: string
   duration?: string
-  file_size?: string
+  sourceType?: 'youtube' | 'local'
+  fileName?: string
+  mimeType?: string
+  fileSize?: number
   addedAt?: number
 }
 
@@ -151,6 +157,8 @@ export const usePlayerStore = defineStore('player', () => {
   // YouTube player internal references
   let ytPlayer: any = null
   let progressTimer: any = null
+  let localAudioElement: HTMLAudioElement | null = null
+  let localAudioUrl: string | null = null
 
   // Helpers
   const showToast = (msg: string, dur = 3000) => {
@@ -166,6 +174,98 @@ export const usePlayerStore = defineStore('player', () => {
     const m = Math.floor(s / 60)
     const remainder = s % 60
     return `${m}:${remainder < 10 ? '0' : ''}${remainder}`
+  }
+
+  const releaseLocalAudio = () => {
+    if (localAudioElement) {
+      localAudioElement.pause()
+      localAudioElement.removeAttribute('src')
+      localAudioElement.load()
+      localAudioElement = null
+    }
+    if (localAudioUrl) {
+      URL.revokeObjectURL(localAudioUrl)
+      localAudioUrl = null
+    }
+  }
+
+  const playLocalAudio = async (track: Track, autoPlay: boolean) => {
+    if (typeof window === 'undefined') return
+
+    localAudioElement?.pause()
+    let file: Blob | null
+    try {
+      file = await getLocalAudioFile(track.id)
+    } catch (error) {
+      console.error('[Audio] Could not read local audio:', error)
+      showToast('Could not read the saved audio file from this device.')
+      return
+    }
+    if (currentTrack.value?.id !== track.id) return
+    if (!file) {
+      isPlaying.value = false
+      isBuffering.value = false
+      showToast('This audio file is missing from this device. Import it again to play offline.')
+      return
+    }
+
+    if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') ytPlayer.pauseVideo()
+    stopProgressLoop()
+
+    if (!localAudioElement) {
+      localAudioElement = new Audio()
+      localAudioElement.preload = 'metadata'
+      localAudioElement.addEventListener('loadedmetadata', () => {
+        isReady.value = true
+        duration.value = localAudioElement?.duration || 0
+      })
+      localAudioElement.addEventListener('timeupdate', () => {
+        currentTime.value = localAudioElement?.currentTime || 0
+      })
+      localAudioElement.addEventListener('play', () => {
+        isPlaying.value = true
+        isBuffering.value = false
+        updateMediaSession()
+      })
+      localAudioElement.addEventListener('pause', () => {
+        isPlaying.value = false
+        isBuffering.value = false
+      })
+      localAudioElement.addEventListener('waiting', () => {
+        isBuffering.value = true
+      })
+      localAudioElement.addEventListener('canplay', () => {
+        isBuffering.value = false
+      })
+      localAudioElement.addEventListener('ended', () => {
+        isPlaying.value = false
+        handleTrackEnded()
+      })
+      localAudioElement.addEventListener('error', () => {
+        isPlaying.value = false
+        isBuffering.value = false
+        showToast('Could not play this audio file.')
+      })
+    }
+
+    if (localAudioUrl) URL.revokeObjectURL(localAudioUrl)
+    localAudioUrl = URL.createObjectURL(file)
+    localAudioElement.src = localAudioUrl
+    localAudioElement.volume = volume.value / 100
+    localAudioElement.muted = isMuted.value
+    localAudioElement.load()
+
+    if (autoPlay) {
+      isBuffering.value = true
+      try {
+        await localAudioElement.play()
+      } catch (error) {
+        isPlaying.value = false
+        isBuffering.value = false
+        console.warn('[Audio] Local audio playback failed:', error)
+        showToast('Could not start audio playback. Try pressing Play again.')
+      }
+    }
   }
 
   // Local storage sync
@@ -240,7 +340,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   const downloadTrack = async (track: Track) => {
     if (isDownloaded(track.id)) {
-      showToast('Track already saved in SQLite downloads')
+      showToast('Track details are already saved. YouTube audio still needs an internet connection.')
       return
     }
 
@@ -249,7 +349,7 @@ export const usePlayerStore = defineStore('player', () => {
       await addDownloadToSqlite(track)
       const list = await fetchAllDownloads()
       downloads.value = list
-      showToast(`Saved to SQLite: "${track.title.slice(0, 30)}..."`)
+      showToast(`Saved track details for "${track.title.slice(0, 30)}...". Import audio for offline playback.`)
     } catch (err: any) {
       console.error('[SQLite] Download error:', err)
       showToast('Failed to save to SQLite: ' + (err.message || 'Error'))
@@ -258,8 +358,49 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  const importLocalAudio = async (file: File, onProgress?: AudioImportProgress) => {
+    try {
+      const track = await addLocalAudioToSqlite(file, onProgress)
+      downloads.value = await fetchAllDownloads()
+      return { success: true as const, track }
+    } catch (error) {
+      console.error('[Audio] Could not import local audio:', error)
+      const message = error instanceof Error ? error.message : 'Could not save this audio file'
+      showToast(message)
+      return { success: false as const, error: message }
+    }
+  }
+
+  const exportLocalAudio = async (track: DownloadedTrack) => {
+    try {
+      if (track.sourceType !== 'local') {
+        throw new Error('Only audio files imported from this device can be exported.')
+      }
+      const file = await getLocalAudioFile(track.id)
+      if (!file) throw new Error('The saved audio file is missing from this device.')
+
+      const url = URL.createObjectURL(file)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = track.fileName || `${track.title}.mp3`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+      showToast(`Exporting ${anchor.download}`)
+    } catch (error) {
+      console.error('[Audio] Could not export local audio:', error)
+      showToast(error instanceof Error ? error.message : 'Could not export this audio file')
+    }
+  }
+
   const removeDownload = async (trackId: string) => {
     try {
+      if (currentTrack.value?.id === trackId && currentTrack.value.sourceType === 'local') {
+        pauseCurrent()
+        releaseLocalAudio()
+        currentTrack.value = null
+      }
       await removeDownloadFromSqlite(trackId)
       downloads.value = downloads.value.filter(d => d.id !== trackId)
       showToast('Removed track from SQLite database')
@@ -271,11 +412,17 @@ export const usePlayerStore = defineStore('player', () => {
 
   const clearDownloadsDb = async () => {
     try {
+      if (currentTrack.value?.sourceType === 'local') {
+        pauseCurrent()
+        releaseLocalAudio()
+        currentTrack.value = null
+      }
       await clearAllSqliteDownloads()
       downloads.value = []
       showToast('SQLite downloads table cleared')
-    } catch (err: any) {
-      showToast('Failed to clear SQLite downloads')
+    } catch (error) {
+      console.error('[SQLite] Could not clear downloads:', error)
+      showToast(error instanceof Error ? error.message : 'Failed to clear SQLite downloads')
     }
   }
 
@@ -474,7 +621,7 @@ export const usePlayerStore = defineStore('player', () => {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.value.title,
         artist: currentTrack.value.channel,
-        album: 'YouTube Music',
+        album: currentTrack.value.sourceType === 'local' ? 'Offline Audio' : 'YouTube Music',
         artwork: [
           { src: currentTrack.value.thumb, sizes: '512x512', type: 'image/jpeg' }
         ]
@@ -521,6 +668,16 @@ export const usePlayerStore = defineStore('player', () => {
       localStorage.setItem('vibe_history', JSON.stringify(history.value))
     }
 
+    if (track.sourceType === 'local') {
+      if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') ytPlayer.pauseVideo()
+      releaseLocalAudio()
+      isPlaying.value = false
+      isBuffering.value = false
+      void playLocalAudio(track, autoPlay)
+      return
+    }
+
+    releaseLocalAudio()
     if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
       if (autoPlay) {
         ytPlayer.loadVideoById(track.id, 0)
@@ -532,6 +689,17 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   const playCurrent = () => {
+    if (currentTrack.value?.sourceType === 'local') {
+      if (localAudioElement) {
+        void localAudioElement.play().catch((error) => {
+          console.warn('[Audio] Local audio playback failed:', error)
+          showToast('Could not start audio playback. Try again.')
+        })
+      } else {
+        void playLocalAudio(currentTrack.value, true)
+      }
+      return
+    }
     if (ytPlayer && typeof ytPlayer.playVideo === 'function') {
       ytPlayer.playVideo()
       isPlaying.value = true
@@ -539,6 +707,10 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   const pauseCurrent = () => {
+    if (currentTrack.value?.sourceType === 'local') {
+      localAudioElement?.pause()
+      return
+    }
     if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
       ytPlayer.pauseVideo()
       isPlaying.value = false
@@ -587,6 +759,11 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   const seekTo = (seconds: number) => {
+    if (currentTrack.value?.sourceType === 'local' && localAudioElement) {
+      localAudioElement.currentTime = seconds
+      currentTime.value = seconds
+      return
+    }
     if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
       ytPlayer.seekTo(seconds, true)
       currentTime.value = seconds
@@ -598,9 +775,11 @@ export const usePlayerStore = defineStore('player', () => {
     if (ytPlayer && typeof ytPlayer.setVolume === 'function') {
       ytPlayer.setVolume(volume.value)
     }
+    if (localAudioElement) localAudioElement.volume = volume.value / 100
     if (isMuted.value && volume.value > 0) {
       isMuted.value = false
       if (ytPlayer) ytPlayer.unMute()
+      if (localAudioElement) localAudioElement.muted = false
     }
     if (typeof window !== 'undefined') {
       localStorage.setItem('vibe_volume', String(volume.value))
@@ -613,6 +792,7 @@ export const usePlayerStore = defineStore('player', () => {
       if (isMuted.value) ytPlayer.mute()
       else ytPlayer.unMute()
     }
+    if (localAudioElement) localAudioElement.muted = isMuted.value
   }
 
   const toggleShuffle = () => {
@@ -726,6 +906,8 @@ export const usePlayerStore = defineStore('player', () => {
     initSqlite,
     isDownloaded,
     downloadTrack,
+    importLocalAudio,
+    exportLocalAudio,
     removeDownload,
     clearDownloadsDb,
     exportSqliteDb,

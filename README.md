@@ -8,12 +8,14 @@ A responsive, mobile-first music Progressive Web App (PWA) built with **Nuxt 3**
 
 - **Progressive Web App (PWA)**:
   - Installable on iOS, Android, macOS, and Windows desktop with standalone mode.
-  - Service worker caching (`sw.js`) for offline shell and asset delivery.
+  - Service worker pre-caches the app shell, built assets, and SQLite WebAssembly for offline startup.
   - Web App Manifest (`manifest.webmanifest`) with custom branding and icons.
 - **SQLite Track Library**:
   - WebAssembly-powered SQLite database (`sql.js`) with persistent binary storage in browser IndexedDB.
-  - **Downloads Menu**: dedicated tab to save, view, play, and manage track metadata locally.
-  - **Export & Import**: Download your SQLite database as `.sqlite` file and restore backups anytime.
+  - **Downloads Menu**: save YouTube track details locally and import audio files from your device.
+  - Imported audio bytes are stored in SQLite BLOBs and can be played offline; file export is available from the saved list.
+  - YouTube entries only store metadata and still require an internet connection to play; importing a local audio file is required for offline audio.
+  - **Database Export & Import**: back up and restore the SQLite database, including imported audio BLOBs, as a `.sqlite` file.
   - **Interactive SQL Console**: Run live SQL queries (`SELECT * FROM downloads;`) directly inside the app.
   - Track audio is streamed from YouTube; audio files are not downloaded or stored offline.
 - **Custom Logo & Design System**:

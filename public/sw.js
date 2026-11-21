@@ -3,7 +3,7 @@
  * Progressive Web App (PWA) Offline Cache & Background Management
  */
 
-const CACHE_NAME = 'somleng-pwa-v2'
+const CACHE_NAME = 'somleng-pwa-v3'
 const STATIC_ASSETS = [
   '/',
   '/manifest.webmanifest',
@@ -28,16 +28,49 @@ async function isValidWasm(response) {
     bytes[3] === 0x6d
 }
 
-// Install event: cache static app shell assets
+async function cacheOfflineShell(cache) {
+  const response = await fetch('/')
+  if (!response.ok) throw new Error(`Failed to cache app shell (${response.status})`)
+
+  const html = await response.text()
+
+  const assets = [...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)]
+    .map((match) => new URL(match[1], self.location.origin))
+    .filter((url) =>
+      url.origin === self.location.origin &&
+      url.pathname.startsWith('/_nuxt/') &&
+      /\.(?:js|css)$/.test(url.pathname)
+    )
+
+  if (!assets.length) throw new Error('No built Nuxt assets were found in the app shell.')
+
+  await Promise.all(assets.map(async (url) => {
+    const request = new Request(url.href)
+    const assetResponse = await fetch(request)
+    if (!assetResponse.ok) {
+      throw new Error(`Failed to cache app asset ${url.pathname} (${assetResponse.status})`)
+    }
+    await cache.put(request, assetResponse)
+  }))
+}
+
+// Install event: cache the shell, its versioned Nuxt assets, and SQLite WebAssembly.
 self.addEventListener('install', (event) => {
   self.skipWaiting()
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Pre-caching static assets')
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn('[SW] Cache addAll partial warning:', err)
-      })
-    })
+    (async () => {
+      const cache = await caches.open(CACHE_NAME)
+      await cache.addAll(STATIC_ASSETS)
+      await cacheOfflineShell(cache)
+
+      const wasmUrl = new URL('/sql-wasm.wasm?v=2', self.location.origin)
+      const wasmRequest = new Request(wasmUrl.href)
+      const wasmResponse = await fetch(wasmRequest)
+      if (!await isValidWasm(wasmResponse)) {
+        throw new Error('SQLite WebAssembly asset failed validation during install')
+      }
+      await cache.put(wasmRequest, wasmResponse)
+    })()
   )
 })
 

@@ -423,7 +423,7 @@
                 </div>
                 <h2 class="text-xl sm:text-2xl font-black text-white mt-0.5">Saved Tracks</h2>
                 <p class="text-xs text-slate-300 mt-1">
-                  {{ store.downloads.length }} track details saved in this device's SQLite database
+                  {{ store.downloads.length }} saved tracks · {{ localAudioDownloads.length }} audio files ready offline
                 </p>
               </div>
             </div>
@@ -431,14 +431,14 @@
             <!-- Action buttons -->
             <div class="flex flex-wrap items-center gap-2">
               <button
-                v-if="store.downloads.length"
+                v-if="localAudioDownloads.length"
                 @click="playAllDownloads"
                 class="px-4 py-2 rounded-xl bg-emerald-500 text-white font-bold text-xs hover:bg-emerald-400 active:scale-95 transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-500/25"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
                   <path d="M8 5v14l11-7z" />
                 </svg>
-                Play All
+                Play Offline
               </button>
               <button
                 @click="store.exportSqliteDb"
@@ -471,6 +471,75 @@
             </div>
           </div>
         </div>
+
+        <div class="glass-panel rounded-3xl border border-emerald-500/20 p-5 sm:p-6">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-start gap-3">
+              <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
+                  <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
+                  <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-white">Add audio files for offline listening</h3>
+                <p class="mt-1 max-w-xl text-xs leading-relaxed text-slate-400">
+                  Choose audio you own or have permission to store. Audio bytes are saved as SQLite BLOBs and can play without internet. YouTube tracks only save metadata.
+                </p>
+                <p v-if="localAudioDownloads.length" class="mt-2 text-[11px] font-medium text-emerald-300">
+                  {{ localAudioDownloads.length }} files · {{ formatFileSize(localAudioBytes) }} stored on this device
+                </p>
+              </div>
+            </div>
+            <label
+              class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 active:scale-95"
+              :class="{ 'pointer-events-none opacity-50': !store.isSqliteReady || isImportingAudio }"
+            >
+              <span v-if="isImportingAudio" class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+              <span v-else>Choose audio files</span>
+              <input
+                type="file"
+                accept="audio/*,.mp3"
+                multiple
+                class="hidden"
+                :disabled="!store.isSqliteReady || isImportingAudio"
+                @change="handleImportAudioFiles"
+              />
+            </label>
+          </div>
+          <div v-if="visibleLocalImportProgress.length" class="mt-5 space-y-3 border-t border-white/5 pt-4">
+            <div
+              v-for="item in visibleLocalImportProgress"
+              :key="item.id"
+              class="rounded-2xl bg-dark-950/60 p-3"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <p class="truncate text-xs font-medium text-slate-200">{{ item.name }}</p>
+                <span
+                  class="flex-shrink-0 text-[11px] font-semibold"
+                  :class="item.phase === 'complete' ? 'text-emerald-300' : item.phase === 'error' ? 'text-rose-300' : 'text-slate-400'"
+                >
+                  {{ item.phase === 'reading' ? `${item.progress}%` : item.phase === 'saving' ? 'Saving to SQLite…' : item.phase === 'complete' ? 'Ready offline' : 'Failed' }}
+                </span>
+              </div>
+              <div
+                v-if="item.phase === 'reading'"
+                role="progressbar"
+                :aria-valuenow="item.progress"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"
+              >
+                <div class="h-full rounded-full bg-emerald-400 transition-[width] duration-150" :style="{ width: `${item.progress}%` }"></div>
+              </div>
+              <div v-else-if="item.phase === 'saving'" class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div class="h-full w-1/3 animate-pulse rounded-full bg-emerald-400"></div>
+              </div>
+              <p v-if="item.error" class="mt-2 text-[11px] text-rose-300">{{ item.error }}</p>
+            </div>
+          </div>
+        </div>
+
         <p v-if="store.sqliteError" class="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-300">
           SQLite could not start: {{ store.sqliteError }}
         </p>
@@ -566,9 +635,11 @@
                 :is-playing="store.isPlaying && item.id === store.currentTrack?.id"
                 :is-fav="store.isFavorite(item.id)"
                 :show-delete="true"
-                @select="store.loadTrack(item, true, store.downloads)"
+                :show-export-audio="item.sourceType === 'local'"
+                @select="store.loadTrack(item, true, item.sourceType === 'local' ? localAudioDownloads : store.downloads)"
                 @toggle-favorite="store.toggleFavorite(item)"
                 @delete="store.removeDownload(item.id)"
+                @export-audio="store.exportLocalAudio(item)"
               />
             </div>
           </div>
@@ -586,18 +657,12 @@
               </svg>
             </div>
             <div>
-              <h4 class="text-base font-bold text-white">No SQLite downloads yet</h4>
+              <h4 class="text-base font-bold text-white">Your offline library is empty</h4>
               <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Save track details to SQLite on this device. Audio continues to stream from YouTube and is not stored offline.
+                Import audio files above to listen offline, or save YouTube track details for quick access when you are online.
               </p>
             </div>
             <div class="flex flex-wrap items-center justify-center gap-2 pt-2">
-              <button
-                @click="downloadSampleTracks"
-                class="px-4 py-2 rounded-xl bg-emerald-500 text-white font-bold text-xs hover:bg-emerald-400 active:scale-95 transition-all shadow-md shadow-emerald-500/25"
-              >
-                + Save Starter Track Details
-              </button>
               <button
                 @click="store.activeTab = 'search'"
                 class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold transition-all border border-white/10"
@@ -661,7 +726,7 @@
               <div>
                 <h3 class="text-sm font-bold text-white">SQLite Database Storage</h3>
                 <p class="text-xs text-slate-400 mt-0.5">
-                  {{ store.downloads.length }} track details saved in local SQLite (.sqlite)
+                  {{ store.downloads.length }} track records and {{ localAudioDownloads.length }} audio files in SQLite
                 </p>
               </div>
             </div>
@@ -669,6 +734,7 @@
               <button
                 @click="store.exportSqliteDb"
                 class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold transition-all"
+                title="Exports the SQLite database, including imported audio files"
               >
                 Export DB
               </button>
@@ -764,12 +830,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { usePlayerStore, DEFAULT_TRACKS } from '~/stores/player'
+import { computed, ref, onMounted } from 'vue'
+import { usePlayerStore } from '~/stores/player'
 
 const store = usePlayerStore()
 
 const searchInput = ref('')
+const isImportingAudio = ref(false)
+const localImportProgress = ref<Array<{
+  id: string
+  trackId?: string
+  name: string
+  progress: number
+  phase: 'reading' | 'saving' | 'complete' | 'error'
+  error?: string
+}>>([])
+const localAudioDownloads = computed(() => store.downloads.filter(track => track.sourceType === 'local'))
+const localAudioBytes = computed(() => localAudioDownloads.value.reduce((total, track) => total + (track.fileSize || 0), 0))
+const visibleLocalImportProgress = computed(() => localImportProgress.value.filter(item =>
+  item.phase !== 'complete' || localAudioDownloads.value.some(track => track.id === item.trackId)
+))
 const showSqlConsole = ref(false)
 const sqlQueryInput = ref('SELECT id, title, channel, downloaded_at FROM downloads;')
 const queryResult = ref<{ columns: string[]; rows: any[][] } | null>(null)
@@ -797,8 +877,8 @@ const genreChips = [
 onMounted(async () => {
   store.initFromStorage()
   store.initYouTube()
-  await store.initSqlite()
   store.initPwa()
+  await store.initSqlite()
 
   // Run initial default query for the SQL console
   executeSqlQuery()
@@ -830,18 +910,52 @@ const playLikedSongs = () => {
 }
 
 const playAllDownloads = () => {
-  if (store.downloads.length) {
-    store.loadTrack(store.downloads[0], true, store.downloads)
-    store.showToast(`Playing ${store.downloads.length} SQLite downloads`)
+  const tracks = localAudioDownloads.value
+  if (tracks.length) {
+    store.loadTrack(tracks[0], true, tracks)
+    store.showToast(`Playing ${tracks.length} offline audio files`)
   }
 }
 
-const downloadSampleTracks = async () => {
-  const sampleTracks = DEFAULT_TRACKS.trending.slice(0, 3)
-  for (const track of sampleTracks) {
-    await store.downloadTrack(track)
+const formatFileSize = (size: number) => {
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const handleImportAudioFiles = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  if (!files.length) return
+
+  isImportingAudio.value = true
+  localImportProgress.value = files.map((file, index) => ({
+    id: `${Date.now()}-${index}`,
+    name: file.name,
+    progress: 0,
+    phase: 'reading'
+  }))
+  let imported = 0
+  try {
+    for (const [index, file] of files.entries()) {
+      const progress = localImportProgress.value[index]
+      const result = await store.importLocalAudio(file, (percent, phase) => {
+        Object.assign(progress, { progress: percent, phase })
+      })
+      if (result.success) {
+        imported += 1
+        Object.assign(progress, { progress: 100, phase: 'complete', trackId: result.track.id })
+      } else {
+        Object.assign(progress, { phase: 'error', error: result.error })
+      }
+    }
+    if (imported) {
+      executeSqlQuery()
+      store.showToast(`${imported} audio file${imported === 1 ? '' : 's'} ready for offline playback`)
+    }
+  } finally {
+    isImportingAudio.value = false
+    input.value = ''
   }
-  executeSqlQuery()
 }
 
 const handleImportSqliteFile = async (e: Event) => {

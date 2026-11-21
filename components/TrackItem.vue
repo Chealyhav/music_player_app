@@ -69,17 +69,20 @@
         <span
           v-if="isDownloaded"
           class="flex-shrink-0 text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5"
-          title="Track details saved in SQLite"
+          :title="track.sourceType === 'local' ? 'Audio saved on this device for offline playback' : 'Track details saved in SQLite'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="w-2.5 h-2.5">
             <polyline points="20 6 9 17 4 12" />
           </svg>
-          SQL
+          {{ track.sourceType === 'local' ? 'OFFLINE' : 'SQL' }}
         </span>
       </div>
       <p class="text-xs text-slate-400 truncate mt-0.5 flex items-center gap-1.5">
         <span class="truncate">{{ track.channel }}</span>
         <span v-if="track.duration" class="text-[10px] text-slate-500">• {{ track.duration }}</span>
+        <span v-if="track.sourceType === 'local'" class="text-[10px] text-emerald-400/80">
+          • {{ formatFileSize(track.fileSize || 0) }}
+        </span>
       </p>
     </div>
 
@@ -148,6 +151,19 @@
 
       <!-- Delete Button (optional for downloads tab) -->
       <button
+        v-if="showExportAudio && track.sourceType === 'local'"
+        @click.stop="$emit('export-audio', track)"
+        class="p-2 rounded-full text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 active:scale-90 transition-all"
+        title="Export this audio file"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <path d="M12 3v12" />
+          <path d="m7 10 5 5 5-5" />
+        </svg>
+      </button>
+
+      <button
         v-if="showDelete"
         @click.stop="$emit('delete', track)"
         class="p-2 rounded-full text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 active:scale-90 transition-all"
@@ -173,22 +189,31 @@ const props = defineProps<{
   isPlaying?: boolean
   isFav?: boolean
   showDelete?: boolean
+  showExportAudio?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'select', track: Track): void
   (e: 'toggle-favorite', track: Track): void
   (e: 'delete', track: Track): void
+  (e: 'export-audio', track: Track): void
 }>()
 
 const store = usePlayerStore()
 
 const isDownloaded = computed(() => store.isDownloaded(props.track.id))
 const isDownloading = computed(() => store.isDownloading[props.track.id])
+const formatFileSize = (size: number) => {
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
 
 const handleDownloadClick = () => {
   if (isDownloaded.value) {
-    store.showToast(`"${props.track.title.slice(0, 25)}..." is stored in SQLite`)
+    const message = props.track.sourceType === 'local'
+      ? 'This audio file is saved on this device for offline playback.'
+      : `"${props.track.title.slice(0, 25)}..." is stored in SQLite`
+    store.showToast(message)
   } else {
     store.downloadTrack(props.track)
   }
