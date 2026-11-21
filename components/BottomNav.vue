@@ -50,7 +50,7 @@
       <!-- Library Tab -->
       <button
         @click="store.activeTab = 'library'"
-        class="flex flex-col items-center justify-center w-14 py-1 text-slate-400 transition-colors"
+        class="flex flex-col items-center justify-center w-12 py-1 text-slate-400 transition-colors"
         :class="{ '!text-brand-500 font-semibold': store.activeTab === 'library' }"
       >
         <svg
@@ -71,10 +71,40 @@
         <span class="text-[10px] tracking-tight">Library</span>
       </button>
 
+      <!-- SQLite Downloads Tab -->
+      <button
+        @click="store.activeTab = 'downloads'"
+        class="flex flex-col items-center justify-center w-12 py-1 text-slate-400 transition-colors relative"
+        :class="{ '!text-brand-500 font-semibold': store.activeTab === 'downloads' }"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="w-5 h-5 mb-1"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        <span class="text-[10px] tracking-tight">Downloads</span>
+        <!-- Badge for downloaded count -->
+        <span
+          v-if="store.downloads.length"
+          class="absolute top-1 right-2 min-w-[14px] h-[14px] px-1 rounded-full bg-brand-500 text-white text-[9px] font-bold flex items-center justify-center leading-none"
+        >
+          {{ store.downloads.length > 9 ? '9+' : store.downloads.length }}
+        </span>
+      </button>
+
       <!-- Settings / Key Tab -->
       <button
         @click="store.activeTab = 'settings'"
-        class="flex flex-col items-center justify-center w-14 py-1 text-slate-400 transition-colors relative"
+        class="flex flex-col items-center justify-center w-12 py-1 text-slate-400 transition-colors relative"
         :class="{ '!text-brand-500 font-semibold': store.activeTab === 'settings' }"
       >
         <svg

@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#141a29" />
+      <stop offset="60%" stop-color="#0a0d14" />
+      <stop offset="100%" stop-color="#05070a" />
+    </radialGradient>
+
+    <!-- Outer Neon Glow Border Gradient (Following Brand Color System: Rose #f43f5e to Indigo #6366f1 to Cyan #06b6d4) -->
+    <linearGradient id="neonBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e" />
+      <stop offset="35%" stop-color="#fb7185" />
+      <stop offset="70%" stop-color="#818cf8" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+
+    <!-- Inner Ambient Glow -->
+    <linearGradient id="innerGlow" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.4" />
+      <stop offset="50%" stop-color="#a855f7" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.35" />
+    </linearGradient>
+
+    <!-- Wave Gradient 1 (Brand Rose - Purple) -->
+    <linearGradient id="waveRose" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e11d48" />
+      <stop offset="60%" stop-color="#ec4899" />
+      <stop offset="100%" stop-color="#a855f7" />
+    </linearGradient>
+
+    <!-- Wave Gradient 2 (Indigo - Cyan) -->
+    <linearGradient id="waveCyan" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="50%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+
+    <!-- Left Soundbars Gradient -->
+    <linearGradient id="leftBarsGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#e11d48" />
+      <stop offset="100%" stop-color="#fb7185" />
+    </linearGradient>
+
+    <!-- Right Soundbars Gradient -->
+    <linearGradient id="rightBarsGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+
+    <!-- Gear Body Metallic Gradient -->
+    <linearGradient id="gearGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="50%" stop-color="#e2e8f0" />
+      <stop offset="100%" stop-color="#cbd5e1" />
+    </linearGradient>
+
+    <!-- Slider Badge Gradient -->
+    <linearGradient id="badgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e" />
+      <stop offset="50%" stop-color="#d946ef" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+
+    <!-- Glow Filter -->
+    <filter id="neonBlur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <filter id="badgeShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.6" />
+    </filter>
+  </defs>
+
+  <!-- Squircle Base Frame -->
+  <rect x="24" y="24" width="464" height="464" rx="100" fill="url(#bgGrad)" stroke="url(#neonBorder)" stroke-width="12" />
+
+  <!-- Ambient Internal Glow Reflections -->
+  <rect x="30" y="30" width="452" height="452" rx="94" fill="url(#innerGlow)" opacity="0.35" />
+
+  <!-- Left Frequency Equalizer Bars -->
+  <g opacity="0.9">
+    <rect x="42" y="215" width="13" height="65" rx="6.5" fill="url(#leftBarsGrad)" />
+    <rect x="62" y="190" width="13" height="100" rx="6.5" fill="url(#leftBarsGrad)" />
+    <rect x="82" y="165" width="13" height="135" rx="6.5" fill="url(#leftBarsGrad)" />
+    <rect x="102" y="185" width="13" height="110" rx="6.5" fill="url(#leftBarsGrad)" />
+  </g>
+
+  <!-- Right Frequency Equalizer Bars -->
+  <g opacity="0.9">
+    <rect x="412" y="185" width="13" height="110" rx="6.5" fill="url(#rightBarsGrad)" />
+    <rect x="432" y="170" width="13" height="125" rx="6.5" fill="url(#rightBarsGrad)" />
+    <rect x="452" y="195" width="13" height="95" rx="6.5" fill="url(#rightBarsGrad)" />
+  </g>
+
+  <!-- Flowing Bottom Audio Wave Ribbons -->
+  <!-- Back wave layer (Cyan/Blue) -->
+  <path d="M 24 370 C 130 395, 200 350, 310 330 C 390 315, 435 345, 488 320 L 488 430 C 470 460, 435 488, 388 488 L 124 488 C 77 488, 42 460, 24 430 Z" 
+        fill="url(#waveCyan)" opacity="0.5" />
+
+  <!-- Front wave layer (Rose/Purple) -->
+  <path d="M 24 395 C 100 365, 175 420, 270 410 C 365 400, 430 455, 488 430 L 488 435 C 470 465, 435 488, 388 488 L 124 488 C 77 488, 42 465, 24 435 Z" 
+        fill="url(#waveRose)" opacity="0.75" />
+
+  <!-- Wave Accent Glow Stroke -->
+  <path d="M 26 380 C 120 400, 190 355, 300 340 C 380 325, 425 355, 486 330" 
+        stroke="#38bdf8" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.7" />
+  <path d="M 26 405 C 110 375, 180 430, 280 415 C 375 400, 435 450, 486 425" 
+        stroke="#fb7185" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.8" />
+
+  <!-- Central Gear Mechanism -->
+  <!-- 8-toothed Mechanical Cogwheel -->
+  <g filter="url(#badgeShadow)">
+    <path d="
+      M 256 100
+      L 272 100 A 10 10 0 0 1 282 107 L 290 128 A 10 10 0 0 0 299 133 L 322 128 A 10 10 0 0 1 333 133 L 344 148 A 10 10 0 0 1 343 160 L 333 179 A 10 10 0 0 0 336 190 L 354 205 A 10 10 0 0 1 359 217 L 359 237 A 10 10 0 0 1 354 249 L 336 264 A 10 10 0 0 0 333 275 L 343 294 A 10 10 0 0 1 344 306 L 333 321 A 10 10 0 0 1 322 326 L 299 321 A 10 10 0 0 0 290 326 L 282 347 A 10 10 0 0 1 272 354 L 240 354 A 10 10 0 0 1 230 347 L 222 326 A 10 10 0 0 0 213 321 L 190 326 A 10 10 0 0 1 179 321 L 168 306 A 10 10 0 0 1 169 294 L 179 275 A 10 10 0 0 0 176 264 L 158 249 A 10 10 0 0 1 153 237 L 153 217 A 10 10 0 0 1 158 205 L 176 190 A 10 10 0 0 0 179 179 L 169 160 A 10 10 0 0 1 168 148 L 179 133 A 10 10 0 0 1 190 128 L 213 133 A 10 10 0 0 0 222 128 L 230 107 A 10 10 0 0 1 240 100 Z"
+      fill="url(#gearGrad)"
+      stroke="#ffffff"
+      stroke-width="3"
+    />
+
+    <!-- Inner Central Gear Recess -->
+    <circle cx="256" cy="227" r="75" fill="#141a29" stroke="#cbd5e1" stroke-width="4" />
+  </g>
+
+  <!-- Musical Note Inside Gear Hub -->
+  <g fill="url(#gearGrad)">
+    <!-- Stem & Flag -->
+    <path d="M 276 170 L 298 163 C 304 161, 308 165, 308 171 L 308 238 C 308 240, 306 242, 304 243 C 298 245, 288 246, 280 248 C 267 251, 256 260, 256 272 C 256 284, 267 292, 281 292 C 296 292, 308 281, 308 266 L 308 200 L 276 208 Z" />
+    <!-- Beamed or Head Shadow note circle -->
+    <ellipse cx="277" cy="272" rx="22" ry="17" transform="rotate(-15 277 272)" />
+  </g>
+
+  <!-- Bottom-Right Circular Equalizer Slider Badge -->
+  <g filter="url(#badgeShadow)">
+    <circle cx="360" cy="330" r="68" fill="url(#badgeGrad)" stroke="#ffffff" stroke-width="4.5" />
+    
+    <!-- 3 Horizontal Equalizer Slider Tracks with Knobs -->
+    <!-- Top Track -->
+    <line x1="324" y1="306" x2="396" y2="306" stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
+    <circle cx="376" cy="306" r="9" fill="#ffffff" />
+
+    <!-- Middle Track -->
+    <line x1="324" y1="330" x2="396" y2="330" stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
+    <circle cx="348" cy="330" r="9" fill="#ffffff" />
+
+    <!-- Bottom Track -->
+    <line x1="324" y1="354" x2="396" y2="354" stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
+    <circle cx="372" cy="354" r="9" fill="#ffffff" />
+  </g>
+</svg>

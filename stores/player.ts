@@ -1,5 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import {
+  type DownloadedTrack,
+  fetchAllDownloads,
+  addDownloadToSqlite,
+  removeDownloadFromSqlite,
+  clearAllSqliteDownloads,
+  exportSqliteDatabaseBlob,
+  importSqliteDatabase,
+  runQuerySqlite
+} from '~/utils/sqlite'
 
 export interface Track {
   id: string
@@ -7,6 +17,7 @@ export interface Track {
   channel: string
   thumb: string
   duration?: string
+  file_size?: string
   addedAt?: number
 }
 
@@ -114,13 +125,25 @@ export const usePlayerStore = defineStore('player', () => {
   const showFullPlayer = ref<boolean>(false)
   const showVideo = ref<boolean>(false)
   const showApiKeyModal = ref<boolean>(false)
-  const activeTab = ref<'home' | 'search' | 'library' | 'settings'>('home')
+  const activeTab = ref<'home' | 'search' | 'library' | 'downloads' | 'settings'>('home')
   const toastMessage = ref<string | null>(null)
   const searchQuery = ref<string>('')
   const isSearching = ref<boolean>(false)
   const searchResults = ref<Track[]>([])
 
+  // SQLite Downloads state
+  const downloads = ref<DownloadedTrack[]>([])
+  const isSqliteReady = ref<boolean>(false)
+  const sqliteError = ref<string | null>(null)
+  const isDownloading = ref<Record<string, boolean>>({})
+
+  // PWA install state
+  const deferredInstallPrompt = ref<any>(null)
+  const canInstallPwa = ref<boolean>(false)
+  const isPwaInstalled = ref<boolean>(false)
+
   // Stored state
+  const appName = ref<string>(config.public.appName || 'SOMLENG')
   const apiKey = ref<string>(defaultKey)
   const favorites = ref<Track[]>([])
   const history = ref<Track[]>([])
@@ -194,6 +217,159 @@ export const usePlayerStore = defineStore('player', () => {
 
   const isFavorite = (trackId: string) => {
     return favorites.value.some(t => t.id === trackId)
+  }
+
+  // SQLite Downloads Management
+  const initSqlite = async () => {
+    if (typeof window === 'undefined') return
+    try {
+      const list = await fetchAllDownloads()
+      downloads.value = list
+      isSqliteReady.value = true
+      sqliteError.value = null
+      console.log(`[SQLite] Loaded ${list.length} tracks from SQLite database`)
+    } catch (err: any) {
+      console.warn('[SQLite] Init notice:', err)
+      sqliteError.value = err?.message || 'SQLite initialization error'
+    }
+  }
+
+  const isDownloaded = (trackId: string) => {
+    return downloads.value.some(d => d.id === trackId)
+  }
+
+  const downloadTrack = async (track: Track) => {
+    if (isDownloaded(track.id)) {
+      showToast('Track already saved in SQLite downloads')
+      return
+    }
+
+    isDownloading.value[track.id] = true
+    try {
+      await addDownloadToSqlite(track)
+      const list = await fetchAllDownloads()
+      downloads.value = list
+      showToast(`Saved to SQLite: "${track.title.slice(0, 30)}..."`)
+    } catch (err: any) {
+      console.error('[SQLite] Download error:', err)
+      showToast('Failed to save to SQLite: ' + (err.message || 'Error'))
+    } finally {
+      isDownloading.value[track.id] = false
+    }
+  }
+
+  const removeDownload = async (trackId: string) => {
+    try {
+      await removeDownloadFromSqlite(trackId)
+      downloads.value = downloads.value.filter(d => d.id !== trackId)
+      showToast('Removed track from SQLite database')
+    } catch (err: any) {
+      console.error('[SQLite] Remove error:', err)
+      showToast('Failed to remove from SQLite')
+    }
+  }
+
+  const clearDownloadsDb = async () => {
+    try {
+      await clearAllSqliteDownloads()
+      downloads.value = []
+      showToast('SQLite downloads table cleared')
+    } catch (err: any) {
+      showToast('Failed to clear SQLite downloads')
+    }
+  }
+
+  const exportSqliteDb = async () => {
+    try {
+      const blob = await exportSqliteDatabaseBlob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `somleng_music_db_${Date.now()}.sqlite`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      showToast('Exported SQLite database backup (.sqlite)')
+    } catch (err: any) {
+      showToast('SQLite export failed: ' + err.message)
+    }
+  }
+
+  const importSqliteDb = async (file: File) => {
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const count = await importSqliteDatabase(arrayBuffer)
+      const list = await fetchAllDownloads()
+      downloads.value = list
+      showToast(`Imported SQLite database with ${count} tracks!`)
+    } catch (err: any) {
+      console.error('[SQLite] Import error:', err)
+      showToast('SQLite import failed: ' + (err.message || 'Invalid file'))
+    }
+  }
+
+  const runCustomSqliteQuery = async (query: string) => {
+    return await runQuerySqlite(query)
+  }
+
+  // PWA Support & Service Worker Management
+  const initPwa = () => {
+    if (typeof window === 'undefined') return
+
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((reg) => {
+          console.log('[PWA] Service Worker registered with scope:', reg.scope)
+        })
+        .catch((err) => {
+          console.warn('[PWA] Service Worker registration failed:', err)
+        })
+    }
+
+    // Capture install prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault()
+      deferredInstallPrompt.value = e
+      canInstallPwa.value = true
+      console.log('[PWA] beforeinstallprompt captured')
+    })
+
+    // Detect if already installed / running in standalone mode
+    if (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true
+    ) {
+      isPwaInstalled.value = true
+      canInstallPwa.value = false
+    }
+
+    window.addEventListener('appinstalled', () => {
+      isPwaInstalled.value = true
+      canInstallPwa.value = false
+      deferredInstallPrompt.value = null
+      showToast('SOMLENG PWA installed successfully! 🎉')
+    })
+  }
+
+  const triggerPwaInstall = async () => {
+    if (!deferredInstallPrompt.value) {
+      showToast('PWA install prompt not ready yet. You can also use your browser "Install App" menu.')
+      return
+    }
+    try {
+      deferredInstallPrompt.value.prompt()
+      const { outcome } = await deferredInstallPrompt.value.userChoice
+      if (outcome === 'accepted') {
+        showToast('Installing SOMLENG App...')
+      }
+      deferredInstallPrompt.value = null
+      canInstallPwa.value = false
+    } catch (e) {
+      console.warn('Install prompt error:', e)
+    }
   }
 
   // YouTube API Initialization
@@ -518,6 +694,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   return {
+    appName,
     playlist,
     currentTrack,
     currentIndex,
@@ -541,6 +718,25 @@ export const usePlayerStore = defineStore('player', () => {
     apiKey,
     favorites,
     history,
+    // SQLite Downloads
+    downloads,
+    isSqliteReady,
+    sqliteError,
+    isDownloading,
+    initSqlite,
+    isDownloaded,
+    downloadTrack,
+    removeDownload,
+    clearDownloadsDb,
+    exportSqliteDb,
+    importSqliteDb,
+    runCustomSqliteQuery,
+    // PWA Support
+    canInstallPwa,
+    isPwaInstalled,
+    initPwa,
+    triggerPwaInstall,
+    // General
     formatTime,
     showToast,
     initFromStorage,
